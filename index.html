@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест скорости интернета</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0061a8;
+            --bg: #f9f9ff;
+            --surface: #ffffff;
+            --text: #1c1b1f;
+            --border: #ddd;
+            --radius: 12px;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: var(--surface);
+            border-radius: var(--radius);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            padding: 32px 24px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 500;
+            color: #2c3e50;
+            margin: 0 0 8px;
+        }
+
+        p {
+            font-size: 15px;
+            color: #555;
+            margin: 0 0 24px;
+            line-height: 1.5;
+        }
+
+        .result-card {
+            background: #f0f0f8;
+            padding: 16px;
+            border-radius: var(--radius);
+            margin: 16px 0;
+            text-align: left;
+        }
+
+        .result-card strong {
+            display: inline-block;
+            width: 140px;
+            color: #333;
+        }
+
+        .progress {
+            margin: 20px 0;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .progress-bar {
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--primary);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        button {
+            padding: 14px 24px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            font-size: 16px;
+            font-weight: 500;
+            border-radius: 24px;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            align-self: center;
+            min-width: 180px;
+        }
+
+        button:hover:not(:disabled) {
+            background: #005490;
+        }
+
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .loader {
+            display: none;
+            width: 28px;
+            height: 28px;
+            border: 3px solid #e0e0e0;
+            border-top: 3px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 16px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Тест скорости интернета</h1>
+        <p>Точный замер по 10 пакетам по 2 МБ</p>
+
+        <div class="progress">
+            <div>Статус: <span id="status">Готов</span></div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div id="progressText">0 / 10</div>
+        </div>
+
+        <div class="result-card">
+            <strong>Скачивание:</strong> <span id="download">—</span><br>
+            <strong>Средняя скорость:</strong> <span id="avgSpeed">—</span><br>
+            <strong>Задержка (пинг):</strong> <span id="ping">—</span>
+        </div>
+
+        <button id="startBtn">Запустить тест</button>
+        <div class="loader" id="loader"></div>
+    </div>
+
+    <script>
+        // 🔧 Укажите URL к вашему PHP-скрипту
+        const TEST_URL = 'https://53c18a72091d.hosting.myjino.ru/speedtest/service/index.php';
+
+        const startBtn = document.getElementById('startBtn');
+        const statusEl = document.getElementById('status');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const downloadEl = document.getElementById('download');
+        const avgSpeedEl = document.getElementById('avgSpeed');
+        const pingEl = document.getElementById('ping');
+        const loader = document.getElementById('loader');
+
+        const totalChunks = 10;
+        const chunkSizeBytes = 2 * 1024 * 1024; // 2 МБ
+
+        // Измерение пинга (время первого ответа)
+        async function measurePing() {
+            const start = performance.now();
+            try {
+                await fetch(TEST_URL + '?ping=' + Math.random(), {
+                    method: 'GET',
+                    cache: 'no-cache',
+                    signal: AbortSignal.timeout(10000)
+                });
+                const end = performance.now();
+                return Math.round(end - start);
+            } catch (e) {
+                return '—';
+            }
+        }
+
+        // Замер скорости одного пакета
+        async function downloadChunk() {
+            const start = performance.now();
+            try {
+                const response = await fetch(TEST_URL + '?r=' + Math.random(), {
+                    method: 'GET',
+                    cache: 'no-cache',
+                    signal: AbortSignal.timeout(20000) // 20 сек максимум
+                });
+
+                if (!response.ok) return null;
+
+                // Читаем весь blob
+                await response.blob();
+                const end = performance.now();
+                const durationSec = (end - start) / 1000;
+
+                const speedBps = chunkSizeBytes / durationSec;
+                return (speedBps * 8) / 1_000_000; // Мбит/с
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // Запуск теста
+        startBtn.addEventListener('click', async () => {
+            startBtn.disabled = true;
+            loader.style.display = 'block';
+            statusEl.textContent = 'Измерение пинга...';
+
+            // Сброс
+            downloadEl.textContent = '—';
+            avgSpeedEl.textContent = '—';
+            pingEl.textContent = '—';
+            progressFill.style.width = '0%';
+            progressText.textContent = '0 / 10';
+
+            // Пинг
+            const ping = await measurePing();
+            pingEl.textContent = ping + ' мс';
+
+            statusEl.textContent = 'Тест скорости...';
+            const speeds = [];
+
+            for (let i = 0; i < totalChunks; i++) {
+                const speed = await downloadChunk();
+                if (speed !== null) {
+                    speeds.push(speed);
+                    const avg = (speeds.reduce((a, b) => a + b, 0) / speeds.length).toFixed(2);
+                    avgSpeedEl.textContent = `${avg} Мбит/с`;
+                    downloadEl.textContent = `${speed.toFixed(2)} Мбит/с`;
+                }
+
+                const progress = ((i + 1) / totalChunks) * 100;
+                progressFill.style.width = `${progress}%`;
+                progressText.textContent = `${i + 1} / ${totalChunks}`;
+            }
+
+            if (speeds.length > 0) {
+                const final = (speeds.reduce((a, b) => a + b, 0) / speeds.length).toFixed(2);
+                avgSpeedEl.textContent = `${final} Мбит/с`;
+                statusEl.textContent = 'Тест завершён';
+            } else {
+                avgSpeedEl.textContent = 'Ошибка';
+                statusEl.textContent = 'Не удалось измерить';
+            }
+
+            loader.style.display = 'none';
+            startBtn.disabled = false;
+        });
+    </script>
+
+</body>
+</html>
